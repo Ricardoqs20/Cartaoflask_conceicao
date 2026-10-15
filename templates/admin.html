@@ -23,11 +23,8 @@
         body { font-family: 'Segoe UI', sans-serif; background: #f4f4f4; padding: 15px; margin: 0; }
         .container { width: 100%; max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         
-        .admin-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 14px; margin-bottom: 20px; }
-        .admin-brand { display: flex; align-items: center; gap: 12px; }
-        .admin-logo { height: 38px; width: auto; max-width: 140px; object-fit: contain; display: block; }
-        .admin-title { color: #5c181b; font-size: 17px; font-weight: bold; margin: 0; line-height: 1.2; }
-        .admin-subtitle { color: #777; font-size: 11px; margin: 2px 0 0 0; }
+        .admin-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 12px; margin-bottom: 20px; }
+        .admin-title { color: #5c181b; font-size: 18px; font-weight: bold; margin: 0; }
         .admin-nav { display: flex; gap: 8px; }
         .btn-nav { padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; text-decoration: none; display: flex; align-items: center; gap: 5px; }
         .btn-site { background: #f0f0f0; color: #333; }
@@ -57,13 +54,7 @@
 
 <div class="container">
     <div class="admin-header">
-        <div class="admin-brand">
-            <img src="{{ url_for('static', filename='logobordo.png') }}" alt="{{ perfil.nome }}" class="admin-logo">
-            <div>
-                <div class="admin-title">Painel de Imóveis</div>
-                <div class="admin-subtitle">{{ perfil.nome }}</div>
-            </div>
-        </div>
+        <div class="admin-title">Painel de Imóveis</div>
         <div class="admin-nav">
             <a href="/" target="_blank" class="btn-nav btn-site" title="Ver site público"><i class="fa-solid fa-arrow-up-right-from-square"></i> Ver Site</a>
             <a href="/admin/logout" class="btn-nav btn-sair" title="Sair do painel"><i class="fa-solid fa-right-from-bracket"></i> Sair</a>
