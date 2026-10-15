@@ -6,16 +6,28 @@
     <!-- ESSA LINHA ABAIXO BLOQUEIA O IPHONE DE TRANSFORMAR NÚMEROS EM LINKS AZUIS -->
     <meta name="format-detection" content="telephone=no">
     <title>Painel Administrativo - {{ perfil.nome }}</title>
-    <link rel="icon" type="image/png" href="{{ url_for('static', filename='balao_remax_icon.png') }}">
+    <!-- FAVICON E ÍCONE DO APP MOBILE (PWA / ANDROID / IOS) -->
+    <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='icon-192.png') }}">
+    <link rel="icon" type="image/png" sizes="512x512" href="{{ url_for('static', filename='icon-512.png') }}">
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='balao_remax_icon.png') }}">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#5c181b">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="{{ perfil.nome }}">
+
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
         * { box-sizing: border-box; }
         body { font-family: 'Segoe UI', sans-serif; background: #f4f4f4; padding: 15px; margin: 0; }
         .container { width: 100%; max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         
-        .admin-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 12px; margin-bottom: 20px; }
-        .admin-title { color: #5c181b; font-size: 18px; font-weight: bold; margin: 0; }
+        .admin-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 14px; margin-bottom: 20px; }
+        .admin-brand { display: flex; align-items: center; gap: 12px; }
+        .admin-logo { height: 38px; width: auto; max-width: 140px; object-fit: contain; display: block; }
+        .admin-title { color: #5c181b; font-size: 17px; font-weight: bold; margin: 0; line-height: 1.2; }
+        .admin-subtitle { color: #777; font-size: 11px; margin: 2px 0 0 0; }
         .admin-nav { display: flex; gap: 8px; }
         .btn-nav { padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; text-decoration: none; display: flex; align-items: center; gap: 5px; }
         .btn-site { background: #f0f0f0; color: #333; }
@@ -45,7 +57,13 @@
 
 <div class="container">
     <div class="admin-header">
-        <div class="admin-title">Painel de Imóveis</div>
+        <div class="admin-brand">
+            <img src="{{ url_for('static', filename='logobordo.png') }}" alt="{{ perfil.nome }}" class="admin-logo">
+            <div>
+                <div class="admin-title">Painel de Imóveis</div>
+                <div class="admin-subtitle">{{ perfil.nome }}</div>
+            </div>
+        </div>
         <div class="admin-nav">
             <a href="/" target="_blank" class="btn-nav btn-site" title="Ver site público"><i class="fa-solid fa-arrow-up-right-from-square"></i> Ver Site</a>
             <a href="/admin/logout" class="btn-nav btn-sair" title="Sair do painel"><i class="fa-solid fa-right-from-bracket"></i> Sair</a>
@@ -77,5 +95,14 @@
     {% endif %}
 </div>
 
+<script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+            navigator.serviceWorker.register('/sw.js').catch(function (err) {
+                console.log('SW registration error:', err);
+            });
+        });
+    }
+</script>
 </body>
 </html>

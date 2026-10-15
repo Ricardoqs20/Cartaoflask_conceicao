@@ -4,7 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Login - Painel Administrativo</title>
-    <link rel="icon" type="image/png" href="{{ url_for('static', filename=perfil.foto) }}">
+    <!-- FAVICON E ÍCONE DO APP MOBILE (PWA / ANDROID / IOS) -->
+    <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='icon-192.png') }}">
+    <link rel="icon" type="image/png" sizes="512x512" href="{{ url_for('static', filename='icon-512.png') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='balao_remax_icon.png') }}">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#5c181b">
     <style>
         body { font-family: 'Segoe UI', sans-serif; background: #f2efe9; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
         .login-box { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 300px; text-align: center; }
