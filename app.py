@@ -40,9 +40,7 @@ with app.app_context():
 
 def salvar_arquivo(file):
     if file:
-        # Se o filename estiver vazio (comum em Blobs do CropperJS), geramos um nome padrão
         filename_original = file.filename if file.filename else "capa_cortada.jpg"
-        # Sempre salva como .jpg para consistência e melhor compressão
         filename = f"{uuid.uuid4()}.jpg"
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         
@@ -56,13 +54,11 @@ def salvar_arquivo(file):
             elif imagem.mode != 'RGB':
                 imagem = imagem.convert('RGB')
             
-            # Reduz um pouco mais para carregar rápido no celular (máx 1600px)
             max_largura = 1600
             if imagem.width > max_largura:
                 nova_altura = int((max_largura / imagem.width) * imagem.height)
                 imagem = imagem.resize((max_largura, nova_altura), Image.Resampling.LANCZOS)
             
-            # quality 75 + progressive = arquivos bem menores e carregam mais rápido
             imagem.save(
                 filepath,
                 'JPEG',
@@ -82,7 +78,7 @@ PERFIL = {
     "cargo": "Consultora Imobiliária",
     "corretora": "RE/MAX",
     "subtitulo": "Conduzo decisões imobiliárias.",
-    "foto": "corretora.png",
+    "foto": "corretora.jpg",
     "logo": "logobranca.png",
     "whatsapp": "5598991936778",
     "instagram": "https://www.instagram.com/conceicaoqueirozz_/",
@@ -237,13 +233,11 @@ def editar_imovel(id):
             if nova_capa:
                 imovel.imagem = nova_capa
 
-        # Verifica se o imóvel é do tipo link ou completo
         if imovel.link is not None and imovel.link != '':
             imovel.link = request.form.get("link")
         else:
             imovel.descricao = request.form.get("descricao")
             
-            # Pega e limpa a lista de arquivos para garantir que só contêm arquivos válidos
             galeria_files = request.files.getlist('fotos_galeria')
             galeria_files = [f for f in galeria_files if f and f.filename != '']
             
@@ -306,5 +300,26 @@ def service_worker():
     response.headers['Content-Type'] = 'application/javascript'
     return response
 
+# --- Inicialização via Gunicorn (Produção) ---
+import gunicorn.app.base
+
+class StandaloneApplication(gunicorn.app.base.BaseApplication):
+    def __init__(self, app, options=None):
+        self.options = options or {}
+        self.application = app
+        super().__init__()
+
+    def load_config(self):
+        for key, value in self.options.items():
+            if key in self.cfg.settings and value is not None:
+                self.cfg.set(key.lower(), value)
+
+    def load(self):
+        return self.application
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    options = {
+        'bind': '0.0.0.0:4511',
+        'workers': 4,
+    }
+    StandaloneApplication(app, options).run()
