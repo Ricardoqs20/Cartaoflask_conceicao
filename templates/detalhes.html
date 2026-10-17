@@ -102,16 +102,24 @@
                 <button class="carousel-btn btn-next" onclick="mudarSlide(1)"><i class="fa-solid fa-chevron-right"></i></button>
             {% endif %}
 
-            <div class="carousel-slides" id="carouselSlides" onscroll="atualizarContador()">
+            <div class="carousel-slides" id="carouselSlides">
                 {% if imovel.fotos and imovel.fotos | length > 0 %}
                     {% for foto in imovel.fotos %}
                     <div class="slide">
-                        <img src="/static/{{ foto.caminho }}" alt="{{ imovel.titulo }}">
+                        <img src="/static/{{ foto.caminho }}" 
+                             alt="{{ imovel.titulo }}" 
+                             loading="{% if loop.first %}eager{% else %}lazy{% endif %}"
+                             decoding="async"
+                             onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22400%22 height=%22300%22%3E%3Crect fill=%22%23111%22 width=%22400%22 height=%22300%22/%3E%3Ctext fill=%22%23999%22 font-family=%22sans-serif%22 font-size=%2216%22 x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22%3EImagem indisponível%3C/text%3E%3C/svg%3E';">
                     </div>
                     {% endfor %}
                 {% else %}
                     <div class="slide">
-                        <img src="/static/{{ imovel.imagem }}" alt="{{ imovel.titulo }}">
+                        <img src="/static/{{ imovel.imagem }}" 
+                             alt="{{ imovel.titulo }}" 
+                             loading="eager"
+                             decoding="async"
+                             onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22400%22 height=%22300%22%3E%3Crect fill=%22%23111%22 width=%22400%22 height=%22300%22/%3E%3Ctext fill=%22%23999%22 font-family=%22sans-serif%22 font-size=%2216%22 x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22%3EImagem indisponível%3C/text%3E%3C/svg%3E';">
                     </div>
                 {% endif %}
             </div>
@@ -139,25 +147,94 @@
 
     <script>
         const slidesContainer = document.getElementById('carouselSlides');
+        let isScrolling = false;
+        let currentIndex = 0; // índice controlado pelo código (nunca fica negativo ou além do total)
 
-        function mudarSlide(direcao) {
-            if (!slidesContainer) return;
-            const larguraSlide = slidesContainer.clientWidth;
-            slidesContainer.scrollBy({ left: direcao * larguraSlide, behavior: 'smooth' });
+        function getTotalSlides() {
+            return slidesContainer ? slidesContainer.querySelectorAll('.slide').length : 0;
+        }
+
+        function clamp(value, min, max) {
+            return Math.max(min, Math.min(value, max));
+        }
+
+        // Calcula o índice a partir da posição de scroll (usado só no arraste com o dedo)
+        function indexFromScroll() {
+            if (!slidesContainer) return 0;
+            const largura = slidesContainer.clientWidth || 1;
+            const total = getTotalSlides();
+            // Math.round pode dar -1 ou total em caso de overscroll (efeito elástico do iOS)
+            // por isso sempre aplicamos o clamp
+            return clamp(Math.round(slidesContainer.scrollLeft / largura), 0, total - 1);
         }
 
         function atualizarContador() {
-            if (!slidesContainer) return;
-            const totalSlides = slidesContainer.querySelectorAll('.slide').length;
-            if (totalSlides <= 1) return;
+            const total = getTotalSlides();
+            if (total <= 1) return;
 
-            const larguraSlide = slidesContainer.clientWidth;
-            const slideAtual = Math.round(slidesContainer.scrollLeft / larguraSlide) + 1;
+            // Garante que currentIndex nunca saia do intervalo
+            currentIndex = clamp(currentIndex, 0, total - 1);
+
             const contador = document.getElementById('contador-indicador');
             if (contador) {
-                contador.textContent = `${slideAtual} / ${totalSlides}`;
+                contador.textContent = `${currentIndex + 1} / ${total}`;
             }
         }
+
+        function irParaSlide(index, smooth = true) {
+            if (!slidesContainer) return;
+
+            const total = getTotalSlides();
+            if (total <= 1) return;
+
+            currentIndex = clamp(index, 0, total - 1);
+            const largura = slidesContainer.clientWidth;
+
+            isScrolling = true;
+            slidesContainer.scrollTo({
+                left: currentIndex * largura,
+                behavior: smooth ? 'smooth' : 'auto'
+            });
+
+            atualizarContador();
+
+            // Libera depois da animação e força a posição exata (evita overshoot residual)
+            setTimeout(() => {
+                slidesContainer.scrollTo({
+                    left: currentIndex * largura,
+                    behavior: 'auto'
+                });
+                isScrolling = false;
+                atualizarContador();
+            }, 450);
+        }
+
+        function mudarSlide(direcao) {
+            if (!slidesContainer || isScrolling) return;
+            irParaSlide(currentIndex + direcao, true);
+        }
+
+        // Quando o usuário arrasta com o dedo, sincroniza o currentIndex
+        if (slidesContainer) {
+            slidesContainer.addEventListener('scroll', () => {
+                if (isScrolling) return; // ignora enquanto o botão está animando
+
+                const novo = indexFromScroll();
+                if (novo !== currentIndex) {
+                    currentIndex = novo;
+                    atualizarContador();
+                }
+            }, { passive: true });
+
+            // Garante que ao terminar o arraste a posição fique exata
+            slidesContainer.addEventListener('scrollend', () => {
+                if (isScrolling) return;
+                irParaSlide(indexFromScroll(), false);
+            });
+        }
+
+        // Inicializa o contador corretamente
+        atualizarContador();
     </script>
 </body>
 </html>

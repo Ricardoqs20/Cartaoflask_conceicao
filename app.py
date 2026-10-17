@@ -42,8 +42,8 @@ def salvar_arquivo(file):
     if file:
         # Se o filename estiver vazio (comum em Blobs do CropperJS), geramos um nome padrão
         filename_original = file.filename if file.filename else "capa_cortada.jpg"
-        ext = filename_original.rsplit('.', 1)[1].lower() if '.' in filename_original else 'jpg'
-        filename = f"{uuid.uuid4()}.{ext}"
+        # Sempre salva como .jpg para consistência e melhor compressão
+        filename = f"{uuid.uuid4()}.jpg"
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         
         try:
@@ -56,12 +56,20 @@ def salvar_arquivo(file):
             elif imagem.mode != 'RGB':
                 imagem = imagem.convert('RGB')
             
-            max_largura = 1920
+            # Reduz um pouco mais para carregar rápido no celular (máx 1600px)
+            max_largura = 1600
             if imagem.width > max_largura:
                 nova_altura = int((max_largura / imagem.width) * imagem.height)
                 imagem = imagem.resize((max_largura, nova_altura), Image.Resampling.LANCZOS)
             
-            imagem.save(filepath, 'JPEG', quality=82, optimize=True)
+            # quality 75 + progressive = arquivos bem menores e carregam mais rápido
+            imagem.save(
+                filepath,
+                'JPEG',
+                quality=75,
+                optimize=True,
+                progressive=True
+            )
             return f"uploads/{filename}"
         except Exception as e:
             print(f"Erro ao processar imagem com Pillow: {e}")
