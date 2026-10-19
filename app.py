@@ -294,6 +294,10 @@ def excluir_imovel(id):
 def manifest():
     return send_from_directory(app.static_folder, 'manifest.json', mimetype='application/manifest+json')
 
+@app.route('/manifest-admin.json')
+def manifest_admin():
+    return send_from_directory(app.static_folder, 'manifest-admin.json', mimetype='application/manifest+json')
+
 @app.route('/sw.js')
 def service_worker():
     response = make_response(send_from_directory(app.static_folder, 'sw.js'))
