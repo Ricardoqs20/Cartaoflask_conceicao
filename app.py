@@ -220,43 +220,53 @@ def editar_imovel(id):
     imovel = Imovel.query.get_or_404(id)
 
     if request.method == "POST":
-        imovel.titulo = request.form.get("titulo")
-        imovel.negocio = request.form.get("negocio", "venda")
-        preco_limpo = request.form.get("preco_num", "").replace(".", "").replace(",", "")
-        imovel.preco_num = float(preco_limpo) if preco_limpo else 0.0
-        imovel.preco = f"R$ {int(imovel.preco_num):,}".replace(",", ".")
-        imovel.localizacao = request.form.get("localizacao")
+        try:
+            imovel.titulo = request.form.get("titulo")
+            imovel.negocio = request.form.get("negocio", "venda")
+            preco_limpo = request.form.get("preco_num", "").replace(".", "").replace(",", "").strip()
+            try:
+                imovel.preco_num = float(preco_limpo) if preco_limpo else 0.0
+            except ValueError:
+                return "Preço inválido. Use apenas números.", 400
+            imovel.preco = f"R$ {int(imovel.preco_num):,}".replace(",", ".")
+            imovel.localizacao = request.form.get("localizacao")
 
-        capa_file = request.files.get('imagem_arquivo')
-        if capa_file and capa_file.filename != '':
-            nova_capa = salvar_arquivo(capa_file)
-            if nova_capa:
-                imovel.imagem = nova_capa
+            capa_file = request.files.get('imagem_arquivo')
+            if capa_file and capa_file.filename != '':
+                nova_capa = salvar_arquivo(capa_file)
+                if nova_capa:
+                    imovel.imagem = nova_capa
+                else:
+                    return "Erro ao processar a foto de capa. Tente outra imagem.", 400
 
-        if imovel.link is not None and imovel.link != '':
-            imovel.link = request.form.get("link")
-        else:
-            imovel.descricao = request.form.get("descricao")
-            
-            galeria_files = request.files.getlist('fotos_galeria')
-            galeria_files = [f for f in galeria_files if f and f.filename != '']
-            
-            fotos_atuais_count = len(imovel.fotos)
-            vagas_restantes = 20 - fotos_atuais_count
+            if imovel.link is not None and imovel.link != '':
+                imovel.link = request.form.get("link")
+            else:
+                imovel.descricao = request.form.get("descricao")
+                
+                galeria_files = request.files.getlist('fotos_galeria')
+                galeria_files = [f for f in galeria_files if f and f.filename != '']
+                
+                fotos_atuais_count = len(imovel.fotos)
+                vagas_restantes = 20 - fotos_atuais_count
 
-            if vagas_restantes <= 0:
-                galeria_files = []
-            elif len(galeria_files) > vagas_restantes:
-                galeria_files = galeria_files[:vagas_restantes]
+                if vagas_restantes <= 0:
+                    galeria_files = []
+                elif len(galeria_files) > vagas_restantes:
+                    galeria_files = galeria_files[:vagas_restantes]
 
-            for f in galeria_files:
-                caminho_foto = salvar_arquivo(f)
-                if caminho_foto:
-                    nova_foto = FotoImovel(imovel_id=imovel.id, caminho=caminho_foto)
-                    db.session.add(nova_foto)
+                for f in galeria_files:
+                    caminho_foto = salvar_arquivo(f)
+                    if caminho_foto:
+                        nova_foto = FotoImovel(imovel_id=imovel.id, caminho=caminho_foto)
+                        db.session.add(nova_foto)
 
-        db.session.commit()
-        return redirect(url_for("admin_painel"))
+            db.session.commit()
+            return redirect(url_for("admin_painel"))
+        except Exception as e:
+            db.session.rollback()
+            print(f"Erro ao editar imóvel {id}: {e}")
+            return f"Erro ao salvar: {str(e)[:200]}", 500
 
     return render_template("editar.html", imovel=imovel)
 

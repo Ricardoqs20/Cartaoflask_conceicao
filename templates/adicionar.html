@@ -41,6 +41,7 @@
         
         button { width: 100%; padding: 14px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 15px; transition: 0.2s; }
         .btn-salvar { background: #5c181b; color: white; margin-top: 10px; }
+        .btn-salvar:disabled { opacity: 0.7; cursor: not-allowed; }
         .btn-confirmar { background: #222; color: #fff; text-transform: uppercase; letter-spacing: 1px; font-size: 13px; }
         .btn-voltar { display: block; text-align: center; margin-top: 20px; color: #5c181b; text-decoration: none; font-size: 14px; font-weight: 500; }
         .help-text { font-size: 11px; color: #666; margin-top: 2px; }
@@ -114,7 +115,7 @@
                 <div class="form-group">
                     <label>Fotos Adicionais (Galeria - Máximo 20 fotos):</label>
                     <input type="file" id="input_galeria" name="fotos_galeria" accept="image/*" multiple required>
-                    <span class="help-text">Você pode selecionar até 20 fotos para a galeria.</span>
+                    <span class="help-text">Você pode selecionar até 20 fotos. Elas são comprimidas no celular antes de enviar.</span>
                     
                     <div id="galeria-preview-container" style="display: none; margin-top: 12px;">
                         <label style="font-size: 12px; color: #555;">Fotos selecionadas (<span id="galeria-count">0</span> / 20):</label>
@@ -226,7 +227,7 @@
             const secaoLink = document.getElementById('secao-link');
             
             const inputLink = document.getElementById('input_link_externo');
-            const inputGaleria = document.getElementById('input_galeria');
+            const inputGaleriaEl = document.getElementById('input_galeria');
             const inputDescricao = document.getElementById('input_descricao');
 
             if (isCompleto) {
@@ -234,14 +235,14 @@
                 secaoLink.style.display = 'none';
                 
                 inputLink.removeAttribute('required');
-                inputGaleria.setAttribute('required', 'required');
+                inputGaleriaEl.setAttribute('required', 'required');
                 inputDescricao.setAttribute('required', 'required');
             } else {
                 secaoCompleto.style.display = 'none';
                 secaoLink.style.display = 'block';
                 
                 inputLink.setAttribute('required', 'required');
-                inputGaleria.removeAttribute('required');
+                inputGaleriaEl.removeAttribute('required');
                 inputDescricao.removeAttribute('required');
             }
         }
@@ -252,7 +253,40 @@
             input.value = Number(valor).toLocaleString('pt-BR');
         }
 
-        // Configuração segura do evento para o input de foto
+        // Comprime foto no celular antes de enviar (até 20 fotos sem estourar)
+        function comprimirImagem(file, maxLargura = 1600, qualidade = 0.75) {
+            return new Promise((resolve) => {
+                if (!file || !file.type || !file.type.startsWith('image/')) {
+                    resolve(file);
+                    return;
+                }
+                const img = new Image();
+                const url = URL.createObjectURL(file);
+                img.onload = function() {
+                    URL.revokeObjectURL(url);
+                    let w = img.width;
+                    let h = img.height;
+                    if (w > maxLargura) {
+                        h = Math.round((h * maxLargura) / w);
+                        w = maxLargura;
+                    }
+                    const canvas = document.createElement('canvas');
+                    canvas.width = w;
+                    canvas.height = h;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, w, h);
+                    canvas.toBlob(function(blob) {
+                        resolve(blob || file);
+                    }, 'image/jpeg', qualidade);
+                };
+                img.onerror = function() {
+                    URL.revokeObjectURL(url);
+                    resolve(file);
+                };
+                img.src = url;
+            });
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
             const inputFoto = document.getElementById('input_foto');
             if (inputFoto) {
@@ -310,7 +344,7 @@
             }, 'image/jpeg', 0.9);
         });
 
-        document.getElementById('form-adicionar').addEventListener('submit', function(e) {
+        document.getElementById('form-adicionar').addEventListener('submit', async function(e) {
             e.preventDefault();
 
             if (!imagemCortadaBlob) {
@@ -326,31 +360,69 @@
                 }
             }
 
-            const formData = new FormData(this);
-            
-            const precoInput = document.getElementById('preco_input');
-            let precoLimpo = precoInput.value.replace(/\./g, '').replace(',', '.');
-            formData.set('preco_num', precoLimpo);
+            const btnSalvar = this.querySelector('.btn-salvar');
+            const textoOriginal = btnSalvar ? btnSalvar.textContent : 'Salvar Imóvel';
 
-            formData.delete('input_foto');
-            formData.append('imagem_arquivo', imagemCortadaBlob, 'capa_cortada.jpg');
-
-            if (isCompleto && galeriaDataTransfer.files.length > 0) {
-                formData.delete('fotos_galeria');
-                const filesToSend = Array.from(galeriaDataTransfer.files).slice(0, LIMITE_MAXIMO);
-                filesToSend.forEach(file => {
-                    formData.append('fotos_galeria', file);
-                });
+            if (btnSalvar && btnSalvar.disabled) return;
+            if (btnSalvar) {
+                btnSalvar.disabled = true;
+                btnSalvar.textContent = 'Preparando fotos...';
             }
 
-            fetch(window.location.href, {
-                method: 'POST',
-                body: formData
-            }).then(response => {
-                if (response.ok) {
-                    window.location.href = '/admin';
+            try {
+                const formData = new FormData(this);
+                
+                const precoInput = document.getElementById('preco_input');
+                let precoLimpo = (precoInput.value || '').replace(/\./g, '').replace(',', '.');
+                formData.set('preco_num', precoLimpo);
+
+                formData.delete('input_foto');
+                formData.append('imagem_arquivo', imagemCortadaBlob, 'capa_cortada.jpg');
+
+                if (isCompleto && galeriaDataTransfer.files.length > 0) {
+                    formData.delete('fotos_galeria');
+                    const filesToSend = Array.from(galeriaDataTransfer.files).slice(0, LIMITE_MAXIMO);
+                    for (let i = 0; i < filesToSend.length; i++) {
+                        if (btnSalvar) {
+                            btnSalvar.textContent = 'Comprimindo ' + (i + 1) + '/' + filesToSend.length + '...';
+                        }
+                        const comprimida = await comprimirImagem(filesToSend[i]);
+                        formData.append('fotos_galeria', comprimida, 'foto_' + i + '.jpg');
+                    }
                 }
-            });
+
+                if (btnSalvar) btnSalvar.textContent = 'Salvando...';
+
+                const response = await fetch(window.location.href, {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'same-origin',
+                    redirect: 'follow'
+                });
+
+                if (response.ok || response.redirected) {
+                    window.location.href = '/admin';
+                    return;
+                }
+
+                let msg = 'Não foi possível salvar. Tente novamente.';
+                try {
+                    const texto = await response.text();
+                    if (texto && texto.length < 300) msg = texto;
+                    else if (response.status === 413) msg = 'Arquivos ainda muito grandes. Tente novamente.';
+                    else if (response.status === 400) msg = 'Erro ao processar as fotos. Tente outras imagens.';
+                    else if (response.status >= 500) msg = 'Erro no servidor. Tente de novo em instantes.';
+                } catch (_) {}
+                alert(msg);
+            } catch (err) {
+                console.error(err);
+                alert('Falha de conexão ou tempo esgotado ao enviar as fotos. Tente de novo.');
+            } finally {
+                if (btnSalvar) {
+                    btnSalvar.disabled = false;
+                    btnSalvar.textContent = textoOriginal;
+                }
+            }
         });
 
         alternarTipoCadastro();
