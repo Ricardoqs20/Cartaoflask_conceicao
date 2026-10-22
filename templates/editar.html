@@ -398,61 +398,71 @@
             if (btnSalvar && btnSalvar.disabled) return;
             if (btnSalvar) {
                 btnSalvar.disabled = true;
-                btnSalvar.textContent = 'Preparando fotos...';
+                btnSalvar.textContent = 'Salvando dados...';
             }
 
             try {
+                // 1) Salva título, preço, descrição, capa (SEM a galeria)
                 const formData = new FormData(this);
-                
                 const precoInput = document.getElementById('preco_input');
                 let precoLimpo = (precoInput.value || '').replace(/\./g, '').replace(',', '.');
                 formData.set('preco_num', precoLimpo);
-
                 formData.delete('input_foto');
-                
+                formData.delete('fotos_galeria');
+
                 if (imagemCortadaBlob) {
                     formData.append('imagem_arquivo', imagemCortadaBlob, 'capa_cortada.jpg');
                 }
-
-                const vagas = getVagasRestantes();
-                if (novasFotosDataTransfer && novasFotosDataTransfer.files.length > 0) {
-                    formData.delete('fotos_galeria');
-                    const filesToSend = Array.from(novasFotosDataTransfer.files).slice(0, vagas);
-                    for (let i = 0; i < filesToSend.length; i++) {
-                        if (btnSalvar) {
-                            btnSalvar.textContent = 'Comprimindo ' + (i + 1) + '/' + filesToSend.length + '...';
-                        }
-                        const comprimida = await comprimirImagem(filesToSend[i]);
-                        formData.append('fotos_galeria', comprimida, 'foto_' + i + '.jpg');
-                    }
-                }
-
-                if (btnSalvar) btnSalvar.textContent = 'Salvando...';
 
                 const response = await fetch(window.location.href, {
                     method: 'POST',
                     body: formData,
                     credentials: 'same-origin',
-                    redirect: 'follow'
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
                 });
 
-                if (response.ok || response.redirected) {
-                    window.location.href = '/admin';
+                const resultado = await response.json().catch(() => null);
+                if (!response.ok || !resultado || !resultado.ok) {
+                    const msg = (resultado && resultado.erro) ? resultado.erro : ('Erro ao salvar (código ' + response.status + ').');
+                    alert(msg);
                     return;
                 }
 
-                let msg = 'Não foi possível salvar. Tente novamente.';
-                try {
-                    const texto = await response.text();
-                    if (texto && texto.length < 300) msg = texto;
-                    else if (response.status === 413) msg = 'Arquivos ainda muito grandes. Tente novamente.';
-                    else if (response.status === 400) msg = 'Erro ao processar as fotos. Tente outras imagens.';
-                    else if (response.status >= 500) msg = 'Erro no servidor. Tente de novo em instantes.';
-                } catch (_) {}
-                alert(msg);
+                const imovelId = resultado.id;
+
+                // 2) Envia cada foto da galeria UMA POR VEZ
+                const vagas = getVagasRestantes();
+                const filesToSend = (novasFotosDataTransfer && novasFotosDataTransfer.files.length > 0)
+                    ? Array.from(novasFotosDataTransfer.files).slice(0, vagas)
+                    : [];
+
+                for (let i = 0; i < filesToSend.length; i++) {
+                    if (btnSalvar) {
+                        btnSalvar.textContent = 'Enviando foto ' + (i + 1) + '/' + filesToSend.length + '...';
+                    }
+                    const comprimida = await comprimirImagem(filesToSend[i]);
+                    const fdFoto = new FormData();
+                    fdFoto.append('foto', comprimida, 'foto_' + i + '.jpg');
+
+                    const rFoto = await fetch('/admin/upload_foto/' + imovelId, {
+                        method: 'POST',
+                        body: fdFoto,
+                        credentials: 'same-origin',
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                    });
+                    const dataFoto = await rFoto.json().catch(() => null);
+                    if (!rFoto.ok || !dataFoto || !dataFoto.ok) {
+                        const msg = (dataFoto && dataFoto.erro) ? dataFoto.erro : ('Falha na foto ' + (i + 1));
+                        alert('Dados salvos, mas houve erro em algumas fotos: ' + msg);
+                        window.location.href = '/admin';
+                        return;
+                    }
+                }
+
+                window.location.href = '/admin';
             } catch (err) {
                 console.error(err);
-                alert('Falha de conexão ou tempo esgotado ao enviar as fotos. Tente de novo.');
+                alert('Falha de conexão. Verifique a internet e tente de novo.');
             } finally {
                 if (btnSalvar) {
                     btnSalvar.disabled = false;

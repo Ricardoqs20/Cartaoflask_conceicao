@@ -1,6 +1,6 @@
 import os
 import uuid
-from flask import Flask, render_template, request, redirect, url_for, session, make_response, send_from_directory
+from flask import Flask, render_template, request, redirect, url_for, session, make_response, send_from_directory, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from PIL import Image
 
@@ -162,55 +162,68 @@ def adicionar_imovel():
     if not session.get('admin_logado'): return redirect(url_for("admin_login"))
     
     if request.method == "POST":
-        tipo_cadastro = request.form.get("tipo_cadastro", "completo")
-        negocio = request.form.get("negocio", "venda")
-        titulo = request.form.get("titulo")
-        preco_limpo = request.form.get("preco_num", "").replace(".", "").replace(",", "")
-        preco_num = float(preco_limpo) if preco_limpo else 0.0
-        preco_formatado = f"R$ {int(preco_num):,}".replace(",", ".")
-        localizacao = request.form.get("localizacao")
+        try:
+            is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+            tipo_cadastro = request.form.get("tipo_cadastro", "completo")
+            negocio = request.form.get("negocio", "venda")
+            titulo = request.form.get("titulo")
+            preco_limpo = request.form.get("preco_num", "").replace(".", "").replace(",", "").strip()
+            try:
+                preco_num = float(preco_limpo) if preco_limpo else 0.0
+            except ValueError:
+                msg = "Preço inválido. Use apenas números."
+                return (jsonify({"ok": False, "erro": msg}), 400) if is_ajax else (msg, 400)
+            preco_formatado = f"R$ {int(preco_num):,}".replace(",", ".")
+            localizacao = request.form.get("localizacao")
 
-        capa_file = request.files.get('imagem_arquivo')
-        imagem_capa = salvar_arquivo(capa_file)
+            capa_file = request.files.get('imagem_arquivo')
+            imagem_capa = salvar_arquivo(capa_file)
 
-        if not imagem_capa:
-            return "Erro ao processar a foto de capa. Tente outra imagem.", 400
+            if not imagem_capa:
+                msg = "Erro ao processar a foto de capa. Tente outra imagem."
+                return (jsonify({"ok": False, "erro": msg}), 400) if is_ajax else (msg, 400)
 
-        if tipo_cadastro == "link":
-            link = request.form.get("link")
-            descricao = None
-        else:
-            link = None
-            descricao = request.form.get("descricao")
+            if tipo_cadastro == "link":
+                link = request.form.get("link")
+                descricao = None
+            else:
+                link = None
+                descricao = request.form.get("descricao")
 
-        novo = Imovel(
-            titulo=titulo, 
-            negocio=negocio,
-            preco_num=preco_num, 
-            preco=preco_formatado, 
-            localizacao=localizacao, 
-            imagem=imagem_capa, 
-            link=link, 
-            descricao=descricao
-        )
-        db.session.add(novo)
-        db.session.commit()
-
-        if tipo_cadastro == "completo":
-            galeria_files = request.files.getlist('fotos_galeria')
-            galeria_files = [f for f in galeria_files if f and f.filename != '']
-            
-            if len(galeria_files) > 20:
-                galeria_files = galeria_files[:20]
-
-            for f in galeria_files:
-                caminho_foto = salvar_arquivo(f)
-                if caminho_foto:
-                    nova_foto = FotoImovel(imovel_id=novo.id, caminho=caminho_foto)
-                    db.session.add(nova_foto)
+            novo = Imovel(
+                titulo=titulo, 
+                negocio=negocio,
+                preco_num=preco_num, 
+                preco=preco_formatado, 
+                localizacao=localizacao, 
+                imagem=imagem_capa, 
+                link=link, 
+                descricao=descricao
+            )
+            db.session.add(novo)
             db.session.commit()
 
-        return redirect(url_for("admin_painel"))
+            # Galeria só no fluxo antigo (sem AJAX). Com AJAX as fotos vão uma a uma.
+            if not is_ajax and tipo_cadastro == "completo":
+                galeria_files = request.files.getlist('fotos_galeria')
+                galeria_files = [f for f in galeria_files if f and f.filename != '']
+                if len(galeria_files) > 20:
+                    galeria_files = galeria_files[:20]
+                for f in galeria_files:
+                    caminho_foto = salvar_arquivo(f)
+                    if caminho_foto:
+                        db.session.add(FotoImovel(imovel_id=novo.id, caminho=caminho_foto))
+                db.session.commit()
+
+            if is_ajax:
+                return jsonify({"ok": True, "id": novo.id})
+            return redirect(url_for("admin_painel"))
+        except Exception as e:
+            db.session.rollback()
+            print(f"Erro ao adicionar imóvel: {e}")
+            msg = f"Erro ao salvar: {str(e)[:200]}"
+            is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+            return (jsonify({"ok": False, "erro": msg}), 500) if is_ajax else (msg, 500)
 
     return render_template("adicionar.html")
 
@@ -220,6 +233,7 @@ def editar_imovel(id):
     imovel = Imovel.query.get_or_404(id)
 
     if request.method == "POST":
+        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
         try:
             imovel.titulo = request.form.get("titulo")
             imovel.negocio = request.form.get("negocio", "venda")
@@ -227,7 +241,8 @@ def editar_imovel(id):
             try:
                 imovel.preco_num = float(preco_limpo) if preco_limpo else 0.0
             except ValueError:
-                return "Preço inválido. Use apenas números.", 400
+                msg = "Preço inválido. Use apenas números."
+                return (jsonify({"ok": False, "erro": msg}), 400) if is_ajax else (msg, 400)
             imovel.preco = f"R$ {int(imovel.preco_num):,}".replace(",", ".")
             imovel.localizacao = request.form.get("localizacao")
 
@@ -237,38 +252,68 @@ def editar_imovel(id):
                 if nova_capa:
                     imovel.imagem = nova_capa
                 else:
-                    return "Erro ao processar a foto de capa. Tente outra imagem.", 400
+                    msg = "Erro ao processar a foto de capa. Tente outra imagem."
+                    return (jsonify({"ok": False, "erro": msg}), 400) if is_ajax else (msg, 400)
 
             if imovel.link is not None and imovel.link != '':
                 imovel.link = request.form.get("link")
             else:
                 imovel.descricao = request.form.get("descricao")
-                
-                galeria_files = request.files.getlist('fotos_galeria')
-                galeria_files = [f for f in galeria_files if f and f.filename != '']
-                
-                fotos_atuais_count = len(imovel.fotos)
-                vagas_restantes = 20 - fotos_atuais_count
-
-                if vagas_restantes <= 0:
-                    galeria_files = []
-                elif len(galeria_files) > vagas_restantes:
-                    galeria_files = galeria_files[:vagas_restantes]
-
-                for f in galeria_files:
-                    caminho_foto = salvar_arquivo(f)
-                    if caminho_foto:
-                        nova_foto = FotoImovel(imovel_id=imovel.id, caminho=caminho_foto)
-                        db.session.add(nova_foto)
+                # Com AJAX as fotos da galeria sobem uma a uma em /admin/upload_foto
+                if not is_ajax:
+                    galeria_files = request.files.getlist('fotos_galeria')
+                    galeria_files = [f for f in galeria_files if f and f.filename != '']
+                    fotos_atuais_count = len(imovel.fotos)
+                    vagas_restantes = 20 - fotos_atuais_count
+                    if vagas_restantes <= 0:
+                        galeria_files = []
+                    elif len(galeria_files) > vagas_restantes:
+                        galeria_files = galeria_files[:vagas_restantes]
+                    for f in galeria_files:
+                        caminho_foto = salvar_arquivo(f)
+                        if caminho_foto:
+                            db.session.add(FotoImovel(imovel_id=imovel.id, caminho=caminho_foto))
 
             db.session.commit()
+            if is_ajax:
+                return jsonify({"ok": True, "id": imovel.id})
             return redirect(url_for("admin_painel"))
         except Exception as e:
             db.session.rollback()
             print(f"Erro ao editar imóvel {id}: {e}")
-            return f"Erro ao salvar: {str(e)[:200]}", 500
+            msg = f"Erro ao salvar: {str(e)[:200]}"
+            return (jsonify({"ok": False, "erro": msg}), 500) if is_ajax else (msg, 500)
 
     return render_template("editar.html", imovel=imovel)
+
+
+@app.route("/admin/upload_foto/<int:imovel_id>", methods=["POST"])
+def upload_foto(imovel_id):
+    """Recebe UMA foto da galeria por vez (estável no celular com até 20 fotos)."""
+    if not session.get('admin_logado'):
+        return jsonify({"ok": False, "erro": "Sessão expirada. Faça login de novo."}), 401
+
+    imovel = Imovel.query.get_or_404(imovel_id)
+    total_atual = len(imovel.fotos)
+    if total_atual >= 20:
+        return jsonify({"ok": False, "erro": "Limite de 20 fotos atingido."}), 400
+
+    f = request.files.get('foto')
+    if not f or f.filename == '':
+        return jsonify({"ok": False, "erro": "Nenhuma foto enviada."}), 400
+
+    try:
+        caminho_foto = salvar_arquivo(f)
+        if not caminho_foto:
+            return jsonify({"ok": False, "erro": "Erro ao processar a foto."}), 400
+        db.session.add(FotoImovel(imovel_id=imovel.id, caminho=caminho_foto))
+        db.session.commit()
+        return jsonify({"ok": True, "total": total_atual + 1})
+    except Exception as e:
+        db.session.rollback()
+        print(f"Erro upload_foto {imovel_id}: {e}")
+        return jsonify({"ok": False, "erro": str(e)[:200]}), 500
+
 
 @app.route("/admin/excluir_foto/<int:foto_id>")
 def excluir_foto(foto_id):
